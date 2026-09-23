@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install
+        run: python -m pip install -e . pytest
+      - name: pytest
+        run: python -m pytest -q
+      - name: acceptance - textbook kappa fails the 0.6 bar
+        run: |
+          set +e
+          judge-kappa examples/textbook/gold.csv examples/textbook/judge.csv
+          test $? -eq 1
+      - name: acceptance - pairwise judge passes all three checks
+        run: judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv --retest examples/pairwise/run2.csv --swapped examples/pairwise/swapped.csv

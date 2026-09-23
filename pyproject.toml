@@ -1,0 +1,19 @@
+[project]
+name = "judge-kappa"
+version = "0.1.0"
+description = "Is this LLM judge fit to grade? Chance-corrected agreement, test-retest, and position-swap flips, with one exit code."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Vignesh Gopalakrishnan" }]
+dependencies = []
+
+[project.scripts]
+judge-kappa = "judge_kappa.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["judge_kappa"]
