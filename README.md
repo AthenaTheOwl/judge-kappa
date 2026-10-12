@@ -44,6 +44,16 @@ judge-kappa report
 verdict: fit to grade
 ```
 
+## How much noise is the judge's own
+
+Give it five runs of the same judge and it reports how many verdicts change between runs, and the smallest score change it can distinguish from its own noise.
+
+```bash
+judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv   --retest examples/pairwise/run2.csv --retest examples/pairwise/run3.csv   --retest examples/pairwise/run4.csv --retest examples/pairwise/run5.csv   --positive A --gate-margin 0.02
+```
+
+`verdict_move_rate` is the share of items whose label differs in any run. `detection_floor` is the largest gap in the `--positive` label's rate between any two runs: an observed lower bound, since a handful of runs understates the true spread. `--gate-margin` is the distance between your score and its gate threshold; the check fails when that margin is at or below the floor, because a gate set that close cannot tell a real change from the judge's noise. The floor needs `--positive` (a multi-class judge has no default score). Test-retest kappa still uses the first `--retest`; with a single `--retest` and no `--positive`, the report is unchanged.
+
 ## Inputs
 
 Every file is a CSV with `item_id,label`. The swapped run records verdicts in its own terms (for A/B pairs, "A" means the answer shown first in that run); `--swap-map` translates them back and defaults to `A=B,B=A`. An item the judge skipped counts as a disagreement. Thresholds: `--min-kappa` (0.6), `--min-retest` (0.8), `--max-flip` (0.1). `--json` prints the full report, including which items flipped.
