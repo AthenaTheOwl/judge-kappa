@@ -25,3 +25,10 @@ jobs:
           test $? -eq 1
       - name: acceptance - pairwise judge passes all three checks
         run: judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv --retest examples/pairwise/run2.csv --swapped examples/pairwise/swapped.csv
+      - name: acceptance - five runs, a gate margin inside the noise fails
+        run: |
+          runs="--retest examples/pairwise/run2.csv --retest examples/pairwise/run3.csv --retest examples/pairwise/run4.csv --retest examples/pairwise/run5.csv"
+          set +e
+          judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv $runs --positive A --gate-margin 0.02
+          test $? -eq 1
+          judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv $runs --positive A --gate-margin 0.5

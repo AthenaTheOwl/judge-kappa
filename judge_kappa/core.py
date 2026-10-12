@@ -88,3 +88,34 @@ def position_flip_rate(first: dict[str, str], swapped: dict[str, str], swap_map:
         raise ValueError("no items in common between the first run and the swapped run")
     flipped = [i for i in items if swap_map.get(swapped[i], swapped[i]) != first[i]]
     return FlipRate(len(items), len(flipped), len(flipped) / len(items), flipped)
+
+
+@dataclass
+class Stability:
+    runs: int
+    n: int
+    moved: int
+    moved_items: list[str] = field(default_factory=list)
+    rates: list[float] = field(default_factory=list)
+    floor: float | None = None
+
+    @property
+    def move_rate(self) -> float:
+        return self.moved / self.n
+
+
+def run_stability(runs: list[dict[str, str]], positive: str | None = None) -> Stability:
+    """Compare repeated runs of one judge on the same items (the first run's items).
+
+    An item moved if its label differs in any run; a run that skipped it counts
+    as a different label. With `positive`, the detection floor is the largest
+    gap in that label's rate between any two runs: an observed lower bound on
+    how far the judge's own noise moves its score.
+    """
+    items = sorted(runs[0])
+    moved_items = [i for i in items if len({r.get(i, MISSING) for r in runs}) > 1]
+    stab = Stability(len(runs), len(items), len(moved_items), moved_items)
+    if positive is not None:
+        stab.rates = [sum(1 for i in items if r.get(i, MISSING) == positive) / len(items) for r in runs]
+        stab.floor = max(stab.rates) - min(stab.rates)
+    return stab

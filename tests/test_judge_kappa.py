@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from judge_kappa.cli import main
-from judge_kappa.core import cohen_kappa, parse_swap_map, position_flip_rate, read_labels
+from judge_kappa.core import cohen_kappa, parse_swap_map, position_flip_rate, read_labels, run_stability
 
 EX = Path(__file__).resolve().parents[1] / "examples"
 
@@ -56,3 +56,46 @@ def test_cli_exit_codes(tmp_path, capsys):
 def test_bad_swap_map():
     with pytest.raises(ValueError):
         parse_swap_map("A-B")
+
+
+def test_stability_move_rate_and_floor_by_hand():
+    # A-rates: 3/4, 2/4, 3/4 -> floor 0.25; items 2 and 3 changed label in some run
+    runs = [{"1": "A", "2": "A", "3": "A", "4": "B"},
+            {"1": "A", "2": "B", "3": "A", "4": "B"},
+            {"1": "A", "2": "A", "3": "tie", "4": "A"}]
+    stab = run_stability(runs, "A")
+    assert stab.moved_items == ["2", "3", "4"] and stab.move_rate == pytest.approx(0.75)
+    assert stab.rates == pytest.approx([0.75, 0.5, 0.75]) and stab.floor == pytest.approx(0.25)
+    assert run_stability(runs).floor is None
+
+
+def test_floor_is_largest_gap_between_any_two_runs():
+    runs = [{"1": "A", "2": "A"}, {"1": "A", "2": "B"}, {"1": "B", "2": "B"}]
+    assert run_stability(runs, "A").floor == pytest.approx(1.0)
+
+
+def test_gate_margin_against_five_runs(capsys):
+    pw = EX / "pairwise"
+    cmd = [str(pw / "gold.csv"), str(pw / "run1.csv")]
+    for n in (2, 3, 4, 5):
+        cmd += ["--retest", str(pw / f"run{n}.csv")]
+    cmd += ["--positive", "A"]
+    assert main(cmd + ["--gate-margin", "0.02"]) == 1
+    assert "[FAIL] detection_floor" in capsys.readouterr().out
+    assert main(cmd + ["--gate-margin", "0.5"]) == 0
+    capsys.readouterr()
+    assert main(cmd + ["--gate-margin", "0.1"]) == 1  # margin equal to the floor cannot be told from noise
+    capsys.readouterr()
+
+
+def test_gate_margin_without_positive_is_bad_input(capsys):
+    pw = EX / "pairwise"
+    assert main([str(pw / "gold.csv"), str(pw / "run1.csv"), "--retest", str(pw / "run2.csv"), "--gate-margin", "0.1"]) == 2
+    capsys.readouterr()
+
+
+def test_single_retest_output_is_unchanged(capsys):
+    pw = EX / "pairwise"
+    main([str(pw / "gold.csv"), str(pw / "run1.csv"), "--retest", str(pw / "run2.csv")])
+    out = capsys.readouterr().out
+    assert "verdict_move_rate" not in out and "detection_floor" not in out
