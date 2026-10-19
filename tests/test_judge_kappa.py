@@ -17,6 +17,21 @@ def test_textbook_kappa_is_point_four():
     assert result.kappa == pytest.approx(0.40)
 
 
+def test_evidence_first_fixture_matches_its_readme(capsys):
+    # gold 4 ready / 4 blocked; claim_first agrees on 6 of 8 with 6 ready -> po 0.75, pe 0.50, kappa 0.50
+    ef = EX / "evidence_first"
+    gold = read_labels(ef / "gold.csv")
+    claim = cohen_kappa(gold, read_labels(ef / "claim_first.csv"))
+    assert claim.n == 8
+    assert claim.observed == pytest.approx(0.75)
+    assert claim.expected == pytest.approx(0.50)
+    assert claim.kappa == pytest.approx(0.50)
+    assert cohen_kappa(gold, read_labels(ef / "evidence_first.csv")).kappa == pytest.approx(1.0)
+    assert main([str(ef / "gold.csv"), str(ef / "claim_first.csv")]) == 1
+    assert main([str(ef / "gold.csv"), str(ef / "evidence_first.csv")]) == 0
+    capsys.readouterr()
+
+
 def test_perfect_and_chance_agreement():
     ref = {"1": "a", "2": "b", "3": "a", "4": "b"}
     assert cohen_kappa(ref, dict(ref)).kappa == pytest.approx(1.0)
