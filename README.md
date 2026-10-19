@@ -10,7 +10,7 @@ Before a model grades anything, three questions decide whether its grades mean s
 - **Does it agree with itself?** Test-retest kappa between two runs of the same judge on the same items.
 - **Does it care which answer came first?** The share of pairwise verdicts that change when the two answers swap positions.
 
-Each check has a threshold. Every check passes, exit 0. Any check fails, exit 1. Bad input, exit 2. One line in CI decides whether the judge is allowed to grade.
+Each check has a threshold. Every check passes, exit 0. Any check fails, exit 1. Bad input, exit 2. No check fails but a kappa is undefined, exit 3 (see below). One line in CI decides whether the judge is allowed to grade.
 
 Standard library only. No model calls: you run the judge however you run it, save its verdicts as CSV, and point this at the files.
 
@@ -29,6 +29,7 @@ judge-kappa examples/textbook/gold.csv examples/textbook/judge.csv
 ```text
 judge-kappa report
   [FAIL] kappa_vs_gold        0.400  (needs >= 0.6)  n=50  raw agreement=0.700
+         95% CI [0.123, 0.639]  (n=50, percentile bootstrap, 2000 resamples, seed 0; the interval spans the threshold)
 verdict: not fit to grade
 ```
 
@@ -44,10 +45,16 @@ judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv \
 ```text
 judge-kappa report
   [PASS] kappa_vs_gold        0.833  (needs >= 0.6)  n=20  raw agreement=0.900
+         95% CI [0.574, 1.000]  (n=20, percentile bootstrap, 2000 resamples, seed 0; the interval spans the threshold)
   [PASS] test_retest_kappa    0.913  (needs >= 0.8)  n=20  raw agreement=0.950
+         95% CI [0.688, 1.000]  (n=20, percentile bootstrap, 2000 resamples, seed 0; the interval spans the threshold)
   [PASS] position_flip_rate   0.050  (needs <= 0.1)  n=20  flips=1
 verdict: fit to grade
 ```
+
+## How sure the kappa is
+
+Each kappa comes with a 95% confidence interval and its n: a percentile bootstrap over items, 2000 resamples, seed 0, so the same files give the same interval. Both examples above have intervals that span their threshold: the interval of the judge that failed reaches 0.639, above the 0.6 bar, and the interval of the judge that passed reaches down to 0.574, below it. The gate still reads the point estimate; the interval tells you how much a pass or fail on this gold set is worth. `--resamples N` and `--seed S` change the bootstrap, and `--resamples 0` turns it off ([DEC-JK-004](decisions/DEC-JK-004-bootstrap-interval-for-kappa.md)).
 
 ## How much noise is the judge's own
 
@@ -61,11 +68,13 @@ judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv   --retest exa
 
 ## Inputs
 
-Every file is a CSV with `item_id,label`. The swapped run records verdicts in its own terms (for A/B pairs, "A" means the answer shown first in that run); `--swap-map` translates them back and defaults to `A=B,B=A`. An item the judge skipped counts as a disagreement. Thresholds: `--min-kappa` (0.6), `--min-retest` (0.8), `--max-flip` (0.1). `--json` prints the full report, including which items flipped.
+Every file is a CSV with `item_id,label`. The swapped run records verdicts in its own terms (for A/B pairs, "A" means the answer shown first in that run); `--swap-map` translates them back and defaults to `A=B,B=A`. An item the judge skipped counts as a disagreement. Thresholds: `--min-kappa` (0.6), `--min-retest` (0.8), `--max-flip` (0.1). `--json` prints the full report, including which items flipped and each kappa's `ci`.
 
 ## What it does not do
 
 It does not run the judge, and it does not tell you why a judge disagrees. Kappa also flatters nothing: on a gold set where one label dominates, a judge can agree 95 percent of the time and still score near zero, which is the point.
+
+When the gold set and the judge both use one label throughout, chance agreement is 1 and kappa is 0/0. The check is reported as `[UNDEFINED]` and the run exits 3, so a judge that always answers `pass` cannot clear an all-`pass` gold set ([DEC-JK-003](decisions/DEC-JK-003-undefined-kappa-does-not-pass.md)). Add items the judge should label otherwise.
 
 ## License
 

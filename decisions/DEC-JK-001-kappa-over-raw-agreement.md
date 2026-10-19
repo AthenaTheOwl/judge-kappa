@@ -4,6 +4,8 @@
 
 Accepted (2026-09-23).
 
+Amended by DEC-JK-003 (2026-10-19): an undefined kappa is reported as undefined (exit 3), not as 1.0.
+
 ## Context
 
 LLM judges are usually validated by reporting how often they match human labels. On skewed label sets that number is inflated by chance: a judge that always answers the majority label can match 90 percent of a 90/10 gold set while carrying no information.

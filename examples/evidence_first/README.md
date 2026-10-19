@@ -6,7 +6,7 @@ balanced: four ready, four blocked. `claim_first.csv` agrees on six of eight;
 expected chance agreement is one half, so kappa is `(0.75 - 0.5) / 0.5 = 0.50`.
 `evidence_first.csv` is a deliberately perfect control and has kappa 1.00.
 
-```powershell
+```bash
 python -m judge_kappa examples/evidence_first/gold.csv examples/evidence_first/claim_first.csv
 python -m judge_kappa examples/evidence_first/gold.csv examples/evidence_first/evidence_first.csv
 ```
@@ -19,7 +19,10 @@ To measure that question, label a held-out set from the underlying diffs and
 receipts before producing the review conditions. Hold model, rubric and budgets
 fixed. Give one reviewer the author claim with the evidence, and give the other
 the evidence first. Repeat both conditions and compare false-ready and false-block
-items as well as kappa. Keep author claims out of the human gold-labeling input.
+items as well as kappa. judge-kappa reports kappa only, so count those items by
+comparing each condition's CSV with gold; here both `claim_first.csv` misses
+(items 5 and 6) are false-ready. Keep author claims out of the human gold-labeling
+input.
 
 [Audit Without Verification](https://arxiv.org/abs/2609.07680) motivates testing
 whether reviewers relay upstream conclusions. The separate `--retest` and
