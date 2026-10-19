@@ -14,6 +14,11 @@ Each check has a threshold. Every check passes, exit 0. Any check fails, exit 1.
 
 Standard library only. No model calls: you run the judge however you run it, save its verdicts as CSV, and point this at the files.
 
+The [evidence-first reviewer fixture](examples/evidence_first/README.md) gives a
+hand-computable comparison of two synthetic review conditions: kappa 0.50 and
+1.00 on the same balanced gold set. It also specifies how to collect a real
+paired experiment without letting author claims contaminate human labels.
+
 ## Try it
 
 ```bash
