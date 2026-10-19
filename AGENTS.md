@@ -4,7 +4,7 @@ Operating contract for AI agents working in this repo. Conventions match the res
 
 ## What this repo is
 
-A standard-library CLI that decides whether an LLM judge is fit to grade: Cohen's kappa against human labels, test-retest kappa, and the position-swap flip rate, each with a threshold and one exit code (0 pass, 1 fail, 2 bad input).
+A standard-library CLI that decides whether an LLM judge is fit to grade: Cohen's kappa against human labels, test-retest kappa, and the position-swap flip rate, each with a threshold and one exit code (0 pass, 1 fail, 2 bad input, 3 kappa undefined).
 
 ## Rules
 

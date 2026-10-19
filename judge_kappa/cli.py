@@ -1,6 +1,7 @@
 """judge-kappa: is this LLM judge fit to grade? One report, one exit code.
 
-Exit 0 when every threshold holds, 1 when any fails, 2 on bad input.
+Exit 0 when every threshold holds, 1 when any fails, 2 on bad input, 3 when no
+check fails but a kappa is undefined (one label throughout; DEC-JK-003).
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ import json
 import sys
 
 from judge_kappa.core import cohen_kappa, parse_swap_map, position_flip_rate, read_labels, run_stability
+
+EXIT_PASS, EXIT_FAIL, EXIT_BAD_INPUT, EXIT_UNDEFINED = 0, 1, 2, 3
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,9 +36,14 @@ def run(args: argparse.Namespace) -> tuple[dict, bool]:
     first = read_labels(args.judge)
     report: dict = {"checks": []}
 
-    def check(name: str, value: float, op: str, bound: float, **extra) -> None:
+    def check(name: str, value: float | None, op: str, bound: float, **extra) -> None:
+        if value is None:  # an undefined statistic neither passes nor fails (DEC-JK-003)
+            report["checks"].append({"check": name, "value": None, "threshold": f"{op} {bound}", "pass": False,
+                                     "status": "undefined", **extra})
+            return
         ok = {">=": value >= bound, "<=": value <= bound, "<": value < bound}[op]
-        report["checks"].append({"check": name, "value": round(value, 4), "threshold": f"{op} {bound}", "pass": ok, **extra})
+        report["checks"].append({"check": name, "value": round(value, 4), "threshold": f"{op} {bound}", "pass": ok,
+                                 "status": "pass" if ok else "fail", **extra})
 
     vs_gold = cohen_kappa(gold, first)
     check("kappa_vs_gold", vs_gold.kappa, ">=", args.min_kappa, n=vs_gold.n, observed=round(vs_gold.observed, 4),
@@ -58,14 +66,16 @@ def run(args: argparse.Namespace) -> tuple[dict, bool]:
                                "detection_floor": None if stab.floor is None else round(stab.floor, 4)}
         if args.gate_margin is not None:
             check("detection_floor", stab.floor, "<", args.gate_margin, n=stab.n, runs=stab.runs)
-    report["pass"] = all(c["pass"] for c in report["checks"])
+    statuses = {c["status"] for c in report["checks"]}
+    report["status"] = "fail" if "fail" in statuses else "undefined" if "undefined" in statuses else "pass"
+    report["pass"] = report["status"] == "pass"
     return report, report["pass"]
 
 
 def render(report: dict) -> str:
     lines = ["judge-kappa report"]
     for c in report["checks"]:
-        mark = "PASS" if c["pass"] else "FAIL"
+        mark = c["status"].upper()
         extra = f"  n={c['n']}"
         if "observed" in c:
             extra += f"  raw agreement={c['observed']:.3f}"
@@ -75,7 +85,8 @@ def render(report: dict) -> str:
             extra += f"  flips={c['flips']}"
         if "runs" in c:
             extra += f"  runs={c['runs']}"
-        lines.append(f"  [{mark}] {c['check']:<20} {c['value']:.3f}  (needs {c['threshold']}){extra}")
+        value = "undefined" if c["value"] is None else f"{c['value']:.3f}"
+        lines.append(f"  [{mark}] {c['check']:<20} {value}  (needs {c['threshold']}){extra}")
         if c.get("note"):
             lines.append(f"         note: {c['note']}")
     st = report.get("stability")
@@ -86,7 +97,9 @@ def render(report: dict) -> str:
         else:
             lines.append(f"  detection_floor={st['detection_floor']:.3f}  (observed lower bound: largest gap in the rate of {st['positive']!r} between any two runs; "
                          "a score change smaller than this is indistinguishable from the judge's own noise)")
-    lines.append("verdict: " + ("fit to grade" if report["pass"] else "not fit to grade"))
+    verdict = {"pass": "fit to grade", "fail": "not fit to grade",
+               "undefined": "undefined (insufficient label variation); not fit to grade"}
+    lines.append("verdict: " + verdict[report["status"]])
     return "\n".join(lines)
 
 
@@ -96,9 +109,9 @@ def main(argv: list[str] | None = None) -> int:
         report, ok = run(args)
     except (OSError, ValueError) as exc:
         print(f"judge-kappa: {exc}", file=sys.stderr)
-        return 2
+        return EXIT_BAD_INPUT
     print(json.dumps(report, indent=2) if args.json else render(report))
-    return 0 if ok else 1
+    return {"pass": EXIT_PASS, "fail": EXIT_FAIL, "undefined": EXIT_UNDEFINED}[report["status"]]
 
 
 if __name__ == "__main__":

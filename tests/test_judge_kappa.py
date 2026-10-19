@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -47,9 +48,37 @@ def test_missing_item_counts_as_disagreement():
     assert result.observed == pytest.approx(0.5)
 
 
-def test_single_label_kappa_is_reported_with_a_note():
+def test_single_label_kappa_is_undefined_not_one():
+    # one label throughout: po = pe = 1, so kappa = 0/0 (DEC-JK-003 amends DEC-JK-001)
     result = cohen_kappa({"1": "a", "2": "a"}, {"1": "a", "2": "a"})
-    assert result.kappa == 1.0 and result.note
+    assert result.kappa is None and not result.defined
+    assert result.observed == 1.0 and result.expected == 1.0
+    assert "undefined" in result.note
+
+
+def test_rubber_stamp_on_one_label_gold_is_not_fit(capsys):
+    # 20 all-pass gold items, a judge that always says pass: exit 3, never 0
+    ol = EX / "one_label"
+    assert main([str(ol / "gold.csv"), str(ol / "judge.csv")]) == 3
+    out = capsys.readouterr().out
+    assert "[UNDEFINED] kappa_vs_gold" in out
+    assert "verdict: fit to grade" not in out
+    assert "insufficient label variation" in out
+    assert main([str(ol / "gold.csv"), str(ol / "judge.csv"), "--json"]) == 3
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "undefined" and report["pass"] is False
+    assert report["checks"][0]["value"] is None and report["checks"][0]["status"] == "undefined"
+
+
+def test_a_failed_check_outranks_an_undefined_one(tmp_path, capsys):
+    ol = EX / "one_label"
+    swapped = tmp_path / "swapped.csv"
+    swapped.write_text("item_id,label\n" + "".join(f"{i},{'fail' if i <= 5 else 'pass'}\n" for i in range(1, 21)),
+                       encoding="utf-8")
+    assert main([str(ol / "gold.csv"), str(ol / "judge.csv"), "--swapped", str(swapped)]) == 1
+    out = capsys.readouterr().out
+    assert "[UNDEFINED] kappa_vs_gold" in out and "[FAIL] position_flip_rate" in out
+    assert "verdict: not fit to grade" in out
 
 
 def test_flip_rate_translates_swapped_labels():

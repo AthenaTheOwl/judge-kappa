@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 MISSING = "<missing>"
+UNDEFINED_NOTE = "kappa undefined: both label sets use one label throughout, so chance agreement is 1 and kappa is 0/0"
 
 
 def read_labels(path: str | Path) -> dict[str, str]:
@@ -32,9 +33,13 @@ class Agreement:
     n: int
     observed: float
     expected: float
-    kappa: float
+    kappa: float | None  # None when kappa is undefined (chance agreement is 1)
     missing: int = 0
     note: str = ""
+
+    @property
+    def defined(self) -> bool:
+        return self.kappa is not None
 
 
 def cohen_kappa(reference: dict[str, str], other: dict[str, str]) -> Agreement:
@@ -42,7 +47,8 @@ def cohen_kappa(reference: dict[str, str], other: dict[str, str]) -> Agreement:
 
     An item `other` did not label counts as a disagreement (label <missing>).
     When chance agreement is 1 (both raters used one identical label throughout),
-    kappa is undefined; it is reported as 1.0 with a note.
+    kappa is 0/0: undefined. It is returned as None with a note, never as a
+    number, so it cannot pass a threshold (DEC-JK-003).
     """
     items = sorted(reference)
     pairs = [(reference[i], other.get(i, MISSING)) for i in items]
@@ -53,7 +59,7 @@ def cohen_kappa(reference: dict[str, str], other: dict[str, str]) -> Agreement:
     right = Counter(b for _, b in pairs)
     expected = sum(left[k] * right[k] for k in left) / (n * n)
     if expected == 1.0:
-        return Agreement(n, observed, expected, 1.0, missing, "kappa undefined (one label throughout); reported as 1.0")
+        return Agreement(n, observed, expected, None, missing, UNDEFINED_NOTE)
     return Agreement(n, observed, expected, (observed - expected) / (1 - expected), missing)
 
 

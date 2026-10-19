@@ -10,7 +10,7 @@ Before a model grades anything, three questions decide whether its grades mean s
 - **Does it agree with itself?** Test-retest kappa between two runs of the same judge on the same items.
 - **Does it care which answer came first?** The share of pairwise verdicts that change when the two answers swap positions.
 
-Each check has a threshold. Every check passes, exit 0. Any check fails, exit 1. Bad input, exit 2. One line in CI decides whether the judge is allowed to grade.
+Each check has a threshold. Every check passes, exit 0. Any check fails, exit 1. Bad input, exit 2. No check fails but a kappa is undefined, exit 3 (see below). One line in CI decides whether the judge is allowed to grade.
 
 Standard library only. No model calls: you run the judge however you run it, save its verdicts as CSV, and point this at the files.
 
@@ -66,6 +66,8 @@ Every file is a CSV with `item_id,label`. The swapped run records verdicts in it
 ## What it does not do
 
 It does not run the judge, and it does not tell you why a judge disagrees. Kappa also flatters nothing: on a gold set where one label dominates, a judge can agree 95 percent of the time and still score near zero, which is the point.
+
+When the gold set and the judge both use one label throughout, chance agreement is 1 and kappa is 0/0. The check is reported as `[UNDEFINED]` and the run exits 3, so a judge that always answers `pass` cannot clear an all-`pass` gold set ([DEC-JK-003](decisions/DEC-JK-003-undefined-kappa-does-not-pass.md)). Add items the judge should label otherwise.
 
 ## License
 
