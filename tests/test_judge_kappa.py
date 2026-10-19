@@ -30,6 +30,9 @@ def test_evidence_first_fixture_matches_its_readme(capsys):
     assert main([str(ef / "gold.csv"), str(ef / "claim_first.csv")]) == 1
     assert main([str(ef / "gold.csv"), str(ef / "evidence_first.csv")]) == 0
     capsys.readouterr()
+    readme = (ef / "README.md").read_text(encoding="utf-8")
+    for stated in ("= 0.50`", "kappa 1.00", "exits are 1 and 0"):
+        assert stated in readme
 
 
 def test_perfect_and_chance_agreement():
