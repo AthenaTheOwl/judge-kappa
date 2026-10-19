@@ -19,7 +19,10 @@ To measure that question, label a held-out set from the underlying diffs and
 receipts before producing the review conditions. Hold model, rubric and budgets
 fixed. Give one reviewer the author claim with the evidence, and give the other
 the evidence first. Repeat both conditions and compare false-ready and false-block
-items as well as kappa. Keep author claims out of the human gold-labeling input.
+items as well as kappa. judge-kappa reports kappa only, so count those items by
+comparing each condition's CSV with gold; here both `claim_first.csv` misses
+(items 5 and 6) are false-ready. Keep author claims out of the human gold-labeling
+input.
 
 [Audit Without Verification](https://arxiv.org/abs/2609.07680) motivates testing
 whether reviewers relay upstream conclusions. The separate `--retest` and
