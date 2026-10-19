@@ -29,6 +29,7 @@ judge-kappa examples/textbook/gold.csv examples/textbook/judge.csv
 ```text
 judge-kappa report
   [FAIL] kappa_vs_gold        0.400  (needs >= 0.6)  n=50  raw agreement=0.700
+         95% CI [0.123, 0.639]  (n=50, percentile bootstrap, 2000 resamples, seed 0; the interval spans the threshold)
 verdict: not fit to grade
 ```
 
@@ -44,10 +45,16 @@ judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv \
 ```text
 judge-kappa report
   [PASS] kappa_vs_gold        0.833  (needs >= 0.6)  n=20  raw agreement=0.900
+         95% CI [0.574, 1.000]  (n=20, percentile bootstrap, 2000 resamples, seed 0; the interval spans the threshold)
   [PASS] test_retest_kappa    0.913  (needs >= 0.8)  n=20  raw agreement=0.950
+         95% CI [0.688, 1.000]  (n=20, percentile bootstrap, 2000 resamples, seed 0; the interval spans the threshold)
   [PASS] position_flip_rate   0.050  (needs <= 0.1)  n=20  flips=1
 verdict: fit to grade
 ```
+
+## How sure the kappa is
+
+Each kappa comes with a 95% confidence interval and its n: a percentile bootstrap over items, 2000 resamples, seed 0, so the same files give the same interval. Both examples above have intervals that span their threshold: the interval of the judge that failed reaches 0.639, above the 0.6 bar, and the interval of the judge that passed reaches down to 0.574, below it. The gate still reads the point estimate; the interval tells you how much a pass or fail on this gold set is worth. `--resamples N` and `--seed S` change the bootstrap, and `--resamples 0` turns it off ([DEC-JK-004](decisions/DEC-JK-004-bootstrap-interval-for-kappa.md)).
 
 ## How much noise is the judge's own
 
@@ -61,7 +68,7 @@ judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv   --retest exa
 
 ## Inputs
 
-Every file is a CSV with `item_id,label`. The swapped run records verdicts in its own terms (for A/B pairs, "A" means the answer shown first in that run); `--swap-map` translates them back and defaults to `A=B,B=A`. An item the judge skipped counts as a disagreement. Thresholds: `--min-kappa` (0.6), `--min-retest` (0.8), `--max-flip` (0.1). `--json` prints the full report, including which items flipped.
+Every file is a CSV with `item_id,label`. The swapped run records verdicts in its own terms (for A/B pairs, "A" means the answer shown first in that run); `--swap-map` translates them back and defaults to `A=B,B=A`. An item the judge skipped counts as a disagreement. Thresholds: `--min-kappa` (0.6), `--min-retest` (0.8), `--max-flip` (0.1). `--json` prints the full report, including which items flipped and each kappa's `ci`.
 
 ## What it does not do
 

@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from judge_kappa.cli import main
-from judge_kappa.core import cohen_kappa, parse_swap_map, position_flip_rate, read_labels, run_stability
+from judge_kappa.core import (bootstrap_kappa, cohen_kappa, parse_swap_map, position_flip_rate, read_labels,
+                              run_stability)
 
 EX = Path(__file__).resolve().parents[1] / "examples"
 
@@ -146,3 +147,47 @@ def test_single_retest_output_is_unchanged(capsys):
     main([str(pw / "gold.csv"), str(pw / "run1.csv"), "--retest", str(pw / "run2.csv")])
     out = capsys.readouterr().out
     assert "verdict_move_rate" not in out and "detection_floor" not in out
+
+
+def test_bootstrap_of_perfect_agreement_is_exactly_one():
+    # every resample with both labels has kappa 1; one-label resamples are undefined and left out
+    ref = {"1": "a", "2": "b", "3": "a", "4": "b", "5": "a", "6": "b"}
+    ci = bootstrap_kappa(ref, dict(ref), resamples=500, seed=0)
+    assert (ci.low, ci.high, ci.level, ci.resamples, ci.seed) == (1.0, 1.0, 0.95, 500, 0)
+    assert 0 <= ci.undefined < 500
+
+
+def test_bootstrap_is_seeded_and_pinned():
+    # 2000 resamples, seed 0: same inputs and seed give the same interval
+    tb = read_labels(EX / "textbook/gold.csv"), read_labels(EX / "textbook/judge.csv")
+    ci = bootstrap_kappa(*tb)
+    assert ci == bootstrap_kappa(*tb, resamples=2000, seed=0)
+    assert (ci.low, ci.high) == (pytest.approx(0.1235, abs=1e-4), pytest.approx(0.6388, abs=1e-4))
+    assert ci.high > 0.6  # the failing textbook judge's interval reaches past the 0.6 gate
+    pw = bootstrap_kappa(read_labels(EX / "pairwise/gold.csv"), read_labels(EX / "pairwise/run1.csv"))
+    assert (pw.low, pw.high) == (pytest.approx(0.5745, abs=1e-4), 1.0)
+    assert bootstrap_kappa(*tb, seed=1) != ci
+
+
+def test_bootstrap_has_no_interval_for_an_undefined_kappa_or_zero_resamples():
+    one = read_labels(EX / "one_label/gold.csv")
+    assert bootstrap_kappa(one, dict(one)) is None
+    assert bootstrap_kappa(read_labels(EX / "textbook/gold.csv"), read_labels(EX / "textbook/judge.csv"), resamples=0) is None
+
+
+def test_report_states_interval_and_n_without_changing_the_gate(capsys):
+    pw = EX / "pairwise"
+    cmd = [str(pw / "gold.csv"), str(pw / "run1.csv"), "--retest", str(pw / "run2.csv")]
+    assert main(cmd) == 0  # the point estimate still decides: 0.833 >= 0.6 although the interval reaches 0.574
+    out = capsys.readouterr().out
+    assert "95% CI [0.574, 1.000]  (n=20, percentile bootstrap, 2000 resamples, seed 0; the interval spans the threshold)" in out
+    assert "95% CI [0.688, 1.000]  (n=20," in out
+    assert main(cmd + ["--json"]) == 0
+    ci = json.loads(capsys.readouterr().out)["checks"][0]["ci"]
+    assert ci["level"] == 0.95 and ci["resamples"] == 2000 and ci["seed"] == 0 and ci["high"] == 1.0
+    assert main([str(EX / "textbook/gold.csv"), str(EX / "textbook/judge.csv")]) == 1
+    capsys.readouterr()
+    assert main(cmd + ["--resamples", "0"]) == 0
+    assert "CI [" not in capsys.readouterr().out
+    assert main(cmd + ["--resamples", "-1"]) == 2
+    capsys.readouterr()

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import csv
+import math
+import random
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -62,6 +64,63 @@ def cohen_kappa(reference: dict[str, str], other: dict[str, str]) -> Agreement:
         return Agreement(n, observed, expected, None, missing, UNDEFINED_NOTE)
     return Agreement(n, observed, expected, (observed - expected) / (1 - expected), missing)
 
+
+
+def _kappa_of_pairs(pairs: list[tuple[str, str]]) -> float | None:
+    n = len(pairs)
+    observed = sum(1 for a, b in pairs if a == b) / n
+    left = Counter(a for a, _ in pairs)
+    right = Counter(b for _, b in pairs)
+    expected = sum(left[k] * right[k] for k in left) / (n * n)
+    return None if expected == 1.0 else (observed - expected) / (1 - expected)
+
+
+def _quantile(ordered: list[float], q: float) -> float:
+    """Linear interpolation between order statistics (statistics.quantiles 'inclusive')."""
+    pos = q * (len(ordered) - 1)
+    lo = math.floor(pos)
+    hi = min(lo + 1, len(ordered) - 1)
+    return ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo)
+
+
+@dataclass
+class Interval:
+    low: float
+    high: float
+    level: float
+    resamples: int
+    seed: int
+    undefined: int = 0  # resamples whose kappa was undefined, left out of the percentiles
+
+
+def bootstrap_kappa(reference: dict[str, str], other: dict[str, str], resamples: int = 2000,
+                    seed: int = 0, level: float = 0.95) -> Interval | None:
+    """Percentile bootstrap interval for cohen_kappa(reference, other).
+
+    Draws `resamples` samples of the reference's n items with replacement from
+    random.Random(seed), recomputes kappa on each, and returns the central
+    `level` share of those kappas. The same inputs and seed give the same
+    interval. A resample whose kappa is undefined (one label throughout) is
+    left out and counted. Returns None when the point kappa is undefined,
+    `resamples` is 0, or every resample is undefined.
+    """
+    items = sorted(reference)
+    pairs = [(reference[i], other.get(i, MISSING)) for i in items]
+    if resamples <= 0 or _kappa_of_pairs(pairs) is None:
+        return None
+    rng = random.Random(seed)
+    n = len(pairs)
+    values: list[float] = []
+    for _ in range(resamples):
+        k = _kappa_of_pairs([pairs[j] for j in rng.choices(range(n), k=n)])
+        if k is not None:
+            values.append(k)
+    if not values:
+        return None
+    values.sort()
+    tail = (1 - level) / 2
+    return Interval(_quantile(values, tail), _quantile(values, 1 - tail), level, resamples, seed,
+                    resamples - len(values))
 
 def parse_swap_map(spec: str) -> dict[str, str]:
     """'A=B,B=A' -> {'A': 'B', 'B': 'A'}. Labels not in the map are unchanged."""

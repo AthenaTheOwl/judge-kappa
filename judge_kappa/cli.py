@@ -10,7 +10,8 @@ import argparse
 import json
 import sys
 
-from judge_kappa.core import cohen_kappa, parse_swap_map, position_flip_rate, read_labels, run_stability
+from judge_kappa.core import (bootstrap_kappa, cohen_kappa, parse_swap_map, position_flip_rate, read_labels,
+                              run_stability)
 
 EXIT_PASS, EXIT_FAIL, EXIT_BAD_INPUT, EXIT_UNDEFINED = 0, 1, 2, 3
 
@@ -27,6 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-kappa", type=float, default=0.6, help="minimum kappa against gold (default 0.6)")
     p.add_argument("--min-retest", type=float, default=0.8, help="minimum test-retest kappa (default 0.8)")
     p.add_argument("--max-flip", type=float, default=0.1, help="maximum position-flip rate (default 0.1)")
+    p.add_argument("--resamples", type=int, default=2000,
+                   help="bootstrap resamples for each kappa's 95%% confidence interval (default 2000; 0 turns it off)")
+    p.add_argument("--seed", type=int, default=0, help="random seed for the bootstrap (default 0)")
     p.add_argument("--json", action="store_true", help="print the report as JSON")
     return p
 
@@ -34,7 +38,17 @@ def build_parser() -> argparse.ArgumentParser:
 def run(args: argparse.Namespace) -> tuple[dict, bool]:
     gold = read_labels(args.gold)
     first = read_labels(args.judge)
+    if args.resamples < 0:
+        raise ValueError("--resamples must be 0 or more")
     report: dict = {"checks": []}
+
+    def interval(reference: dict[str, str], other: dict[str, str]) -> dict | None:
+        ci = bootstrap_kappa(reference, other, args.resamples, args.seed)
+        if ci is None:
+            return None
+        return {"level": ci.level, "low": round(ci.low, 6), "high": round(ci.high, 6),
+                "method": "percentile bootstrap over items", "resamples": ci.resamples, "seed": ci.seed,
+                "undefined_resamples": ci.undefined}
 
     def check(name: str, value: float | None, op: str, bound: float, **extra) -> None:
         if value is None:  # an undefined statistic neither passes nor fails (DEC-JK-003)
@@ -47,14 +61,14 @@ def run(args: argparse.Namespace) -> tuple[dict, bool]:
 
     vs_gold = cohen_kappa(gold, first)
     check("kappa_vs_gold", vs_gold.kappa, ">=", args.min_kappa, n=vs_gold.n, observed=round(vs_gold.observed, 4),
-          chance=round(vs_gold.expected, 4), missing=vs_gold.missing, note=vs_gold.note)
+          chance=round(vs_gold.expected, 4), missing=vs_gold.missing, note=vs_gold.note, ci=interval(gold, first))
     if args.gate_margin is not None and (not args.positive or not args.retest):
         raise ValueError("--gate-margin needs --positive and at least one --retest")
     retests = [read_labels(path) for path in args.retest or []]
     if retests:
         retest = cohen_kappa(first, retests[0])
         check("test_retest_kappa", retest.kappa, ">=", args.min_retest, n=retest.n, observed=round(retest.observed, 4),
-              missing=retest.missing, note=retest.note)
+              missing=retest.missing, note=retest.note, ci=interval(first, retests[0]))
     if args.swapped:
         flip = position_flip_rate(first, read_labels(args.swapped), parse_swap_map(args.swap_map))
         check("position_flip_rate", flip.rate, "<=", args.max_flip, n=flip.n, flips=flip.flips, flipped_items=flip.flipped_items)
@@ -87,6 +101,13 @@ def render(report: dict) -> str:
             extra += f"  runs={c['runs']}"
         value = "undefined" if c["value"] is None else f"{c['value']:.3f}"
         lines.append(f"  [{mark}] {c['check']:<20} {value}  (needs {c['threshold']}){extra}")
+        if c.get("ci"):
+            ci = c["ci"]
+            bound = float(c["threshold"].split()[1])
+            dropped = f", {ci['undefined_resamples']} undefined resamples left out" if ci["undefined_resamples"] else ""
+            spans = "; the interval spans the threshold" if ci["low"] < bound <= ci["high"] else ""
+            lines.append(f"         {ci['level']:.0%} CI [{ci['low']:.3f}, {ci['high']:.3f}]  (n={c['n']}, percentile bootstrap, "
+                         f"{ci['resamples']} resamples, seed {ci['seed']}{dropped}{spans})")
         if c.get("note"):
             lines.append(f"         note: {c['note']}")
     st = report.get("stability")
