@@ -30,12 +30,18 @@ jobs:
           test $? -eq 3
       - name: acceptance - pairwise judge passes all three checks
         run: judge-kappa examples/pairwise/gold.csv examples/pairwise/run1.csv --retest examples/pairwise/run2.csv --swapped examples/pairwise/swapped.csv
-      - name: acceptance - evidence-first fixture, claim_first fails and evidence_first passes
+      - name: acceptance - evidence-first fixture, claim_first kappa 0.50 exit 1, evidence_first kappa 1.00 exit 0
         run: |
-          judge-kappa examples/evidence_first/gold.csv examples/evidence_first/evidence_first.csv
+          judge-kappa examples/evidence_first/gold.csv examples/evidence_first/evidence_first.csv | tee ef.txt
+          grep -q 'kappa_vs_gold        1.000' ef.txt
           set +e
-          judge-kappa examples/evidence_first/gold.csv examples/evidence_first/claim_first.csv
-          test $? -eq 1
+          judge-kappa examples/evidence_first/gold.csv examples/evidence_first/claim_first.csv > cf.txt
+          code=$?
+          set -e
+          cat cf.txt
+          test $code -eq 1
+          grep -q 'kappa_vs_gold        0.500' cf.txt
+          rm -f ef.txt cf.txt
       - name: acceptance - five runs, a gate margin inside the noise fails
         run: |
           runs="--retest examples/pairwise/run2.csv --retest examples/pairwise/run3.csv --retest examples/pairwise/run4.csv --retest examples/pairwise/run5.csv"

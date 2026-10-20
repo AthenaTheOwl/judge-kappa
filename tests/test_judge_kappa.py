@@ -37,6 +37,24 @@ def test_evidence_first_fixture_matches_its_readme(capsys):
         assert stated in readme
 
 
+def test_evidence_first_fixture_intervals_match_its_readme(capsys):
+    # n=8: the failing condition's interval covers [0, 1]; the perfect control's is zero width by construction
+    ef = EX / "evidence_first"
+    gold = read_labels(ef / "gold.csv")
+    claim = bootstrap_kappa(gold, read_labels(ef / "claim_first.csv"))
+    assert (claim.low, claim.high, claim.undefined) == (pytest.approx(0.0), pytest.approx(1.0), 6)
+    perfect = bootstrap_kappa(gold, read_labels(ef / "evidence_first.csv"))
+    assert (perfect.low, perfect.high, perfect.undefined) == (pytest.approx(1.0), pytest.approx(1.0), 12)
+    for args, kappa, code in ((["claim_first.csv"], 0.5, 1), (["evidence_first.csv"], 1.0, 0)):
+        assert main([str(ef / "gold.csv"), str(ef / args[0]), "--json"]) == code
+        check = json.loads(capsys.readouterr().out)["checks"][0]
+        assert check["value"] == pytest.approx(kappa) and check["n"] == 8
+    readme = (ef / "README.md").read_text(encoding="utf-8")
+    for stated in ("constructed", "[0.00, 1.00]", "[1.00, 1.00]", "6 undefined", "12 undefined",
+                   "What a general claim would need"):
+        assert stated in readme
+
+
 def test_perfect_and_chance_agreement():
     ref = {"1": "a", "2": "b", "3": "a", "4": "b"}
     assert cohen_kappa(ref, dict(ref)).kappa == pytest.approx(1.0)

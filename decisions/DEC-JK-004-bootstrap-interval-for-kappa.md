@@ -36,4 +36,4 @@ The gate is unchanged: pass or fail is still decided by the point estimate again
 
 ## Limits
 
-A percentile bootstrap undercovers on very small gold sets: on the eight-item `evidence_first` fixture the interval is [0.00, 1.00], which says the set is too small to decide, not that the judge is anywhere in that range with 95% confidence. The interval covers sampling of items only; run-to-run noise is what `--retest` and the detection floor (DEC-JK-002) measure.
+A percentile bootstrap undercovers on very small gold sets: on the eight-item `evidence_first` fixture the `claim_first` interval is [0.00, 1.00], which says the set is too small to decide, not that the judge is anywhere in that range with 95% confidence. The `evidence_first` condition matches gold exactly, so every resample gives kappa 1 and its interval is [1.00, 1.00]: zero width by construction, not a sign of precision. The interval covers sampling of items only; run-to-run noise is what `--retest` and the detection floor (DEC-JK-002) measure.
