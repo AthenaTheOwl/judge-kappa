@@ -14,10 +14,13 @@ Each check has a threshold. Every check passes, exit 0. Any check fails, exit 1.
 
 Standard library only. No model calls: you run the judge however you run it, save its verdicts as CSV, and point this at the files.
 
-The [evidence-first reviewer fixture](examples/evidence_first/README.md) gives a
-hand-computable comparison of two synthetic review conditions: kappa 0.50 and
-1.00 on the same balanced gold set. It also specifies how to collect a real
-paired experiment without letting author claims contaminate human labels.
+The [evidence-first reviewer fixture](examples/evidence_first/README.md) is a
+constructed, eight-item example of comparing two review conditions: kappa 0.50
+(exit 1) and 1.00 (exit 0, a copy of gold by construction) on the same balanced
+gold set. At n=8 the failing condition's 95% interval is [0.00, 1.00], so the
+fixture shows the arithmetic, not that one condition is better. Its README lists
+what a real paired experiment would need, including keeping author claims out of
+the human labels.
 
 ## Try it
 
